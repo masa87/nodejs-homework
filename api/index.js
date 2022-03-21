@@ -4,7 +4,6 @@ const ctrlContacts = require("../controller");
 
 router.get("/contacts", ctrlContacts.get);
 router.get("/contacts/:id", ctrlContacts.getById);
-
-// router.get("/tasks/:id", ctrlTask.getB
+router.post("/contacts", ctrlContacts.addContact);
 
 module.exports = router;
