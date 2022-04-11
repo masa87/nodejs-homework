@@ -1,14 +1,13 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+require("./config/config-passport.js");
 
 require("dotenv").config();
 
 const app = express();
 
-// parse application/json
 app.use(express.json());
-// cors
 app.use(cors());
 
 const routerApi = require("./api");

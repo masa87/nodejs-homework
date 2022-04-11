@@ -1,9 +1,14 @@
 const service = require("../service");
 const { userSchema } = require("../utils/joiSchema.js");
 const jwt = require("jsonwebtoken");
+const gravatar = require("gravatar");
+const Jimp = require("jimp");
+const fs = require("fs");
+const { nanoid } = require("nanoid");
 require("dotenv").config();
 const secret = process.env.SECRET;
 const User = require("../service/schemas/user.js");
+const { sendMail } = require("../utils/sendGrid.js");
 
 const currentUser = async (req, res, next) => {
   const { _id } = req.user;
@@ -14,7 +19,7 @@ const currentUser = async (req, res, next) => {
       code: 200,
       message: "OK",
       data: {
-        email,
+        email: user.email,
         subscription: user.subscription,
       },
     });
@@ -107,6 +112,13 @@ const loginUser = async (req, res, next) => {
         message: "Incorrect login or password",
         data: "Unauthorized",
       });
+    } else if (!user.isVerified) {
+      return res.status(401).json({
+        status: "error",
+        code: 401,
+        message: "Please verify Your account first",
+        data: "Unauthorized",
+      });
     }
 
     const payload = {
@@ -141,31 +153,140 @@ const loginUser = async (req, res, next) => {
 const registerUser = async (req, res, next) => {
   const { email, password } = req.body;
   const { error } = userSchema.validate({ email, password });
+  const avatarURL = gravatar.url(email);
+  const verificationToken = nanoid();
   if (!error) {
     const user = await service.getUser(email);
     if (user) {
       return res.status(409).json({
         status: "error",
         code: 409,
-        message: "Email is already in use",
+        message: "Email already in use",
         data: "Conflict",
       });
     }
     try {
-      const newUser = new User({ email });
+      const newUser = new User({ email, avatarURL, verificationToken });
       newUser.setPassword(password);
       await newUser.save();
+      sendMail(email, verificationToken);
       res.status(201).json({
         status: "success",
         code: 201,
         message: "Created",
         data: {
           user: {
-            email: email,
+            email,
             subscription: "starter",
           },
         },
       });
+    } catch (e) {
+      console.error(e);
+      next(e);
+    }
+  } else {
+    res.status(400).json({
+      status: "error",
+      code: 400,
+      message: error.details[0].message,
+      data: "Bad Request",
+    });
+  }
+};
+
+const updateAvatar = async (req, res, next) => {
+  const { _id } = req.user;
+  const avatarURL = `./avatars/av_${_id}.png`;
+  Jimp.read(`tmp/${req.file.filename}`)
+    .then((avatar) => {
+      return avatar.resize(250, 250).write(`public/avatars/av_${_id}.png`);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+  try {
+    const result = await service.updateUserAvatar(_id, avatarURL);
+    if (result) {
+      fs.unlink(req.file.path, (err) => {
+        console.error(err);
+      });
+      res.status(200).json({
+        status: "success",
+        code: 200,
+        message: "OK",
+        data: {
+          avatarURL,
+        },
+      });
+    } else {
+      res.status(404).json({
+        status: "error",
+        code: 404,
+        message: `User not found`,
+        data: "Not Found",
+      });
+    }
+  } catch (e) {
+    console.error(e);
+    next(e);
+  }
+};
+
+const verifyUser = async (req, res, next) => {
+  const { verificationToken } = req.params;
+  try {
+    const result = await service.updateVerificationToken(verificationToken);
+    if (result) {
+      res.status(200).json({
+        status: "success",
+        code: 200,
+        message: "Verification successfull",
+        data: "OK",
+      });
+    } else {
+      res.status(404).json({
+        status: "error",
+        code: 404,
+        message: `User not found`,
+        data: "Not Found",
+      });
+    }
+  } catch (e) {
+    console.error(e);
+    next(e);
+  }
+};
+
+const resendVerificationMail = async (req, res, next) => {
+  const { email } = req.body;
+  const { error } = userSchema.validate({ email });
+  if (!error) {
+    try {
+      const user = await service.getUser(email);
+      if (!user) {
+        res.status(404).json({
+          status: "error",
+          code: 404,
+          message: `User not found`,
+          data: "Not Found",
+        });
+      } else if (!user.isVerified) {
+        sendMail(email, user.verificationToken);
+        res.status(200).json({
+          status: "success",
+          code: 200,
+          message: "Verification email sent",
+          data: "OK",
+        });
+      } else {
+        res.status(400).json({
+          status: "error",
+          code: 400,
+          message: "Verification passed",
+          data: "Bad request",
+        });
+      }
     } catch (e) {
       console.error(e);
       next(e);
@@ -187,4 +308,7 @@ module.exports = {
   logoutUser,
   currentUser,
   updateUserSub,
+  updateAvatar,
+  verifyUser,
+  resendVerificationMail,
 };

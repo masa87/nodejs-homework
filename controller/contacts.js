@@ -92,6 +92,7 @@ const addContact = async (req, res, next) => {
     });
   }
 };
+
 const updateContact = async (req, res, next) => {
   const { id } = req.params;
   const { name, email, phone } = req.body;
@@ -110,6 +111,7 @@ const updateContact = async (req, res, next) => {
     next(e);
   }
 };
+
 const updateStatus = async (req, res, next) => {
   const { id } = req.params;
   const { favorite } = req.body;
@@ -137,6 +139,7 @@ const updateStatus = async (req, res, next) => {
     next(e);
   }
 };
+
 const removeContactById = async (req, res, next) => {
   const { id } = req.params;
   try {
