@@ -12,6 +12,7 @@ const { sendMail } = require("../utils/sendGrid.js");
 
 const currentUser = async (req, res, next) => {
   const { _id } = req.user;
+  const { email } = await service.getUserById(_id);
   try {
     const user = await service.getUserById(_id);
     res.status(200).json({
@@ -19,7 +20,7 @@ const currentUser = async (req, res, next) => {
       code: 200,
       message: "OK",
       data: {
-        email: user.email,
+        email,
         subscription: user.subscription,
       },
     });
